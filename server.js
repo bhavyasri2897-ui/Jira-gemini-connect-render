@@ -16,7 +16,7 @@ app.use("/public", express.static(path.join(__dirname, "public")));
 const PORT = process.env.PORT || 3000;
 
 // ✅ IMPORTANT: Keep BASE_URL exactly same as your Render service URL
-const BASE_URL = process.env.BASE_URL || "https://jira-plugin-connect-clean-1.onrender.com";
+const BASE_URL = process.env.BASE_URL || "https://jira-gemini-connect-render.onrender.com/";
 
 // ------------------------------
 // ✅ Jira Connect lifecycle hooks
