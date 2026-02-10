@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <script src="https://connect-cdn.atl-paas.net/all.js" data-options="sizeToParent:true"></script>
+  <style>
+    body { font-family: Arial; padding: 16px; }
+    textarea { width:100%; min-height:220px; padding:10px; }
+    .actions { display:flex; gap:10px; justify-content:flex-end; margin-top:12px; }
+    button { padding:8px 14px; cursor:pointer; }
+    .muted { color:#666; font-size:12px; margin-bottom:10px; }
+  </style>
+</head>
+<body>
+  <div class="muted" id="status">Loading…</div>
+  <textarea id="out"></textarea>
+
+  <div class="actions">
+    <button onclick="AP.dialog.close()">Cancel</button>
+    <button id="replaceBtn">Replace description</button>
+  </div>
+
+<script>
+  const statusEl = document.getElementById("status");
+  const outEl = document.getElementById("out");
+  const replaceBtn = document.getElementById("replaceBtn");
+
+  function textToAdf(text) {
+    const lines = String(text || "").split(/\r?\n/);
+    return {
+      type: "doc",
+      version: 1,
+      content: lines.map(line => ({
+        type: "paragraph",
+        content: line ? [{ type: "text", text: line }] : []
+      }))
+    };
+  }
+
+  function updateDescription(issueKey, adfDoc) {
+    return new Promise((resolve, reject) => {
+      AP.request({
+        url: `/rest/api/3/issue/${issueKey}`,
+        type: "PUT",
+        contentType: "application/json",
+        data: JSON.stringify({ fields: { description: adfDoc } }),
+        success: () => resolve(),
+        error: err => reject(err)
+      });
+    });
+  }
+
+  AP.dialog.getCustomData(async (data) => {
+    const { issueKey, output } = data || {};
+    if (!issueKey) return (statusEl.textContent = "❌ issueKey missing");
+
+    outEl.value = output || "";
+    statusEl.textContent = "✅ Enhanced description ready.";
+
+    replaceBtn.onclick = async () => {
+      try {
+        statusEl.textContent = "Updating Jira description…";
+        replaceBtn.disabled = true;
+
+        await updateDescription(issueKey, textToAdf(outEl.value));
+
+        statusEl.textContent = "✅ Updated.";
+        AP.dialog.close();
+      } catch (e) {
+        console.error(e);
+        statusEl.textContent = "❌ Update failed";
+        replaceBtn.disabled = false;
+      }
+    };
+  });
+</script>
+</body>
+</html>

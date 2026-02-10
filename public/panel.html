@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <script src="https://connect-cdn.atl-paas.net/all.js"></script>
+  <style>
+    body { font-family: Arial; padding: 12px; }
+    button { padding: 10px 14px; cursor: pointer; width: 100%; }
+    .muted { color:#666; font-size:12px; margin-top:10px; }
+  </style>
+</head>
+<body>
+  <button id="btnRefine">✨ Refine with AAVA</button>
+  <div class="muted" id="status">Ready.</div>
+
+<script>
+  const btn = document.getElementById("btnRefine");
+  const statusEl = document.getElementById("status");
+  const issueKey = new URLSearchParams(location.search).get("issueKey");
+
+  function setStatus(t) { statusEl.textContent = t; }
+
+  // ADF -> text
+  function adfToText(node) {
+    if (!node) return "";
+    if (Array.isArray(node)) return node.map(adfToText).join("");
+    if (node.type === "text") return node.text || "";
+    if (node.type === "hardBreak") return "\n";
+    return adfToText(node.content || []);
+  }
+
+  function getIssue() {
+    return new Promise((resolve, reject) => {
+      AP.request({
+        url: `/rest/api/3/issue/${issueKey}?fields=summary,description`,
+        type: "GET",
+        success: txt => { try { resolve(JSON.parse(txt)); } catch(e) { reject(e); } },
+        error: err => reject(err)
+      });
+    });
+  }
+
+  async function callGemini(prompt) {
+    const res = await fetch("/api/gemini", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || "Gemini failed");
+    return data.response || "";
+  }
+
+  btn.onclick = async () => {
+    try {
+      if (!issueKey) return setStatus("❌ issueKey missing");
+
+      btn.disabled = true;
+      setStatus("Reading Jira description…");
+
+      const issue = await getIssue();
+      const summary = issue?.fields?.summary || "";
+      const desc = adfToText(issue?.fields?.description).trim();
+
+      setStatus("Calling Gemini…");
+
+      const prompt =
+        `Rewrite professionally.\n\nSummary: ${summary}\n\nDescription:\n${desc || "(empty)"}`;
+
+      const output = await callGemini(prompt);
+
+      setStatus("Opening dialog…");
+
+      // ✅ open dialog and pass output
+      AP.dialog.create({
+        key: "aava-dialog",
+        customData: { issueKey, output }
+      });
+
+      setStatus("Done.");
+    } catch (e) {
+      console.error(e);
+      setStatus("❌ " + (e.message || "Failed"));
+    } finally {
+      btn.disabled = false;
+    }
+  };
+</script>
+</body>
+</html>
